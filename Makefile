@@ -5,6 +5,8 @@ COMPOSE = docker compose
 WEB_SERVICE = web
 DB_SERVICE = db
 APP_DIR = app
+MIGRATIONS_DIR = $(APP_DIR)/migrations
+VERSIONS_DIR = $(MIGRATIONS_DIR)/versions
 ENV_FILE = .env
 
 # Colori per output
@@ -26,7 +28,7 @@ help:
 	@echo "$(GREEN)Comandi disponibili:$(NC)"
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
 
-## init: Inizializza il progetto (crea .env e inizializza Alembic)
+## init: Inizializza il progetto (crea .env e struttura migrations)
 init: init-env init-migrations
 	@echo "$(GREEN)✓ Progetto inizializzato con successo!$(NC)"
 	@echo "$(YELLOW)Ricorda di modificare il file .env con le tue configurazioni$(NC)"
@@ -47,10 +49,20 @@ init-env:
 
 ## init-migrations: Inizializza la directory delle migrazioni Alembic
 init-migrations:
-	@if [ ! -d $(APP_DIR)/migrations ]; then \
-		mkdir -p $(APP_DIR)/migrations; \
-		echo "$(GREEN)✓ Directory migrations creata$(NC)"; \
+	@if [ ! -d $(MIGRATIONS_DIR) ]; then \
+		mkdir -p $(MIGRATIONS_DIR); \
+		mkdir -p $(VERSIONS_DIR); \
+		touch $(MIGRATIONS_DIR)/__init__.py; \
+		echo "$(GREEN)✓ Struttura migrations creata$(NC)"; \
 	else \
+		if [ ! -d $(VERSIONS_DIR) ]; then \
+			mkdir -p $(VERSIONS_DIR); \
+			echo "$(GREEN)✓ Directory versions creata$(NC)"; \
+		fi; \
+		if [ ! -f $(MIGRATIONS_DIR)/__init__.py ]; then \
+			touch $(MIGRATIONS_DIR)/__init__.py; \
+			echo "$(GREEN)✓ File __init__.py creato$(NC)"; \
+		fi; \
 		echo "$(YELLOW)⚠ Directory migrations già esistente$(NC)"; \
 	fi
 
@@ -107,6 +119,10 @@ migrate:
 		echo "$(RED)✗ Errore: Devi specificare un messaggio$(NC)"; \
 		echo "$(YELLOW)Uso: make migrate MSG='descrizione migrazione'$(NC)"; \
 		exit 1; \
+	fi
+	@if [ ! -d $(VERSIONS_DIR) ]; then \
+		echo "$(YELLOW)⚠ Directory versions mancante, creazione in corso...$(NC)"; \
+		mkdir -p $(VERSIONS_DIR); \
 	fi
 	@echo "$(GREEN)Creazione migrazione: $(MSG)$(NC)"
 	$(COMPOSE) exec $(WEB_SERVICE) alembic revision --autogenerate -m "$(MSG)"
@@ -171,6 +187,12 @@ prod:
 	@export FLASK_ENV=production && $(COMPOSE) up -d --build
 	@echo "$(GREEN)✓ Applicazione in produzione$(NC)"
 
+## fix-permissions: Corregge i permessi delle directory (utile se hai problemi)
+fix-permissions:
+	@echo "$(GREEN)Correzione permessi...$(NC)"
+	@chmod -R 755 $(APP_DIR)/migrations
+	@echo "$(GREEN)✓ Permessi corretti$(NC)"
+
 .PHONY: help init init-env init-migrations build up down restart ps logs logs-db logs-all \
         shell shell-db migrate upgrade downgrade migrate-status migrate-history \
-        db-reset test clean clean-all dev prod
+        db-reset test clean clean-all dev prod fix-permissions
