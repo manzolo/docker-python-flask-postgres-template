@@ -21,6 +21,11 @@ __pycache__/
 *.sqlite
 *.sqlite3
 
+# Backups
+backups/
+*.sql
+*.sql.gz
+
 # Logs
 *.log
 
@@ -30,3 +35,5 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+postgres_data/
+pgadmin_data/

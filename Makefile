@@ -1,198 +1,332 @@
-# Makefile per gestire l'applicazione Flask con Docker e Alembic
+# Makefile for managing Flask application with Docker and Alembic
 
-# Variabili
+# Variables
 COMPOSE = docker compose
 WEB_SERVICE = web
 DB_SERVICE = db
+PGADMIN_SERVICE = pgadmin
 APP_DIR = app
 MIGRATIONS_DIR = $(APP_DIR)/migrations
 VERSIONS_DIR = $(MIGRATIONS_DIR)/versions
 ENV_FILE = .env
+BACKUP_DIR = ./backups
 
-# Colori per output
+# Colors for output
 GREEN = \033[0;32m
 YELLOW = \033[1;33m
 RED = \033[0;31m
+BLUE = \033[0;34m
 NC = \033[0m # No Color
 
-# Carica le variabili d'ambiente se il file .env esiste
+# Load environment variables if .env exists
 ifneq (,$(wildcard $(ENV_FILE)))
     include $(ENV_FILE)
     export
 endif
 
+# Auto-detect UID and GID if not set
+ifndef UID
+    UID := $(shell id -u)
+endif
+ifndef GID
+    GID := $(shell id -g)
+endif
+
+export UID
+export GID
+
 .DEFAULT_GOAL := help
 
-## help: Mostra questo messaggio di aiuto
+## help: Show this help message
 help:
-	@echo "$(GREEN)Comandi disponibili:$(NC)"
+	@echo "$(GREEN)Available commands:$(NC)"
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
 
-## init: Inizializza il progetto (crea .env e struttura migrations)
-init: init-env init-migrations
-	@echo "$(GREEN)✓ Progetto inizializzato con successo!$(NC)"
-	@echo "$(YELLOW)Ricorda di modificare il file .env con le tue configurazioni$(NC)"
+## init: Initialize the project (create .env and migrations structure)
+init: init-env init-migrations init-backup-dir fix-permissions
+	@echo "$(GREEN)✓ Project initialized successfully!$(NC)"
+	@echo "$(YELLOW)Remember to modify the .env file with your configurations$(NC)"
+	@echo "$(BLUE)pgAdmin will be available at: http://localhost:$(PGADMIN_EXTERNAL_PORT)$(NC)"
 
-## init-env: Crea il file .env da .env.example
+## init-env: Create .env file from .env.example
 init-env:
 	@if [ ! -f $(ENV_FILE) ]; then \
 		if [ -f .env.example ]; then \
 			cp .env.example $(ENV_FILE); \
-			echo "$(GREEN)✓ File .env creato da .env.example$(NC)"; \
+			sed -i "s/UID=1000/UID=$(UID)/" $(ENV_FILE); \
+			sed -i "s/GID=1000/GID=$(GID)/" $(ENV_FILE); \
+			echo "$(GREEN)✓ .env file created from .env.example$(NC)"; \
+			echo "$(BLUE)  Detected UID=$(UID) GID=$(GID)$(NC)"; \
 		else \
-			echo "$(RED)✗ File .env.example non trovato$(NC)"; \
+			echo "$(RED)✗ .env.example file not found$(NC)"; \
 			exit 1; \
 		fi; \
 	else \
-		echo "$(YELLOW)⚠ File .env già esistente$(NC)"; \
+		echo "$(YELLOW)⚠ .env file already exists$(NC)"; \
 	fi
 
-## init-migrations: Inizializza la directory delle migrazioni Alembic
+## init-migrations: Initialize Alembic migrations directory
 init-migrations:
 	@if [ ! -d $(MIGRATIONS_DIR) ]; then \
 		mkdir -p $(MIGRATIONS_DIR); \
 		mkdir -p $(VERSIONS_DIR); \
 		touch $(MIGRATIONS_DIR)/__init__.py; \
-		echo "$(GREEN)✓ Struttura migrations creata$(NC)"; \
+		echo "$(GREEN)✓ Migrations structure created$(NC)"; \
 	else \
 		if [ ! -d $(VERSIONS_DIR) ]; then \
 			mkdir -p $(VERSIONS_DIR); \
-			echo "$(GREEN)✓ Directory versions creata$(NC)"; \
+			echo "$(GREEN)✓ Versions directory created$(NC)"; \
 		fi; \
 		if [ ! -f $(MIGRATIONS_DIR)/__init__.py ]; then \
 			touch $(MIGRATIONS_DIR)/__init__.py; \
-			echo "$(GREEN)✓ File __init__.py creato$(NC)"; \
+			echo "$(GREEN)✓ __init__.py file created$(NC)"; \
 		fi; \
-		echo "$(YELLOW)⚠ Directory migrations già esistente$(NC)"; \
+		echo "$(YELLOW)⚠ Migrations directory already exists$(NC)"; \
 	fi
 
-## build: Costruisce le immagini Docker
+## init-backup-dir: Initialize backup directory
+init-backup-dir:
+	@if [ ! -d $(BACKUP_DIR) ]; then \
+		mkdir -p $(BACKUP_DIR); \
+		echo "$(GREEN)✓ Backup directory created$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠ Backup directory already exists$(NC)"; \
+	fi
+
+## build: Build Docker images
 build:
-	@echo "$(GREEN)Costruzione delle immagini Docker...$(NC)"
+	@echo "$(GREEN)Building Docker images...$(NC)"
 	$(COMPOSE) build
 
-## up: Avvia i container in background
+## up: Start containers in background
 up:
-	@echo "$(GREEN)Avvio dei container...$(NC)"
+	@echo "$(GREEN)Starting containers...$(NC)"
 	$(COMPOSE) up -d
-	@echo "$(GREEN)✓ Container avviati$(NC)"
+	@echo "$(GREEN)✓ Containers started$(NC)"
+	@echo "$(BLUE)pgAdmin: http://localhost:$(PGADMIN_EXTERNAL_PORT)$(NC)"
 	@make ps
 
-## down: Ferma e rimuove i container
+## down: Stop and remove containers
 down:
-	@echo "$(YELLOW)Arresto dei container...$(NC)"
+	@echo "$(YELLOW)Stopping containers...$(NC)"
 	$(COMPOSE) down
-	@echo "$(GREEN)✓ Container fermati$(NC)"
+	@echo "$(GREEN)✓ Containers stopped$(NC)"
 
-## restart: Riavvia i container
+## restart: Restart containers
 restart: down up
 
-## ps: Mostra lo stato dei container
+## ps: Show container status
 ps:
 	@$(COMPOSE) ps
 
-## logs: Visualizza i log del servizio web
+## logs: View web service logs
 logs:
 	$(COMPOSE) logs -f $(WEB_SERVICE)
 
-## logs-db: Visualizza i log del database
+## logs-db: View database logs
 logs-db:
 	$(COMPOSE) logs -f $(DB_SERVICE)
 
-## logs-all: Visualizza tutti i log
+## logs-pgadmin: View pgAdmin logs
+logs-pgadmin:
+	$(COMPOSE) logs -f $(PGADMIN_SERVICE)
+
+## logs-all: View all logs
 logs-all:
 	$(COMPOSE) logs -f
 
-## shell: Apre una shell bash nel container web
+## shell: Open bash shell in web container
 shell:
-	@echo "$(GREEN)Apertura shell nel container web...$(NC)"
+	@echo "$(GREEN)Opening shell in web container...$(NC)"
 	$(COMPOSE) exec $(WEB_SERVICE) bash
 
-## shell-db: Apre una shell psql nel database
+## shell-db: Open psql shell in database
 shell-db:
-	@echo "$(GREEN)Apertura shell PostgreSQL...$(NC)"
+	@echo "$(GREEN)Opening PostgreSQL shell...$(NC)"
 	$(COMPOSE) exec $(DB_SERVICE) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
 
-## migrate: Crea una nuova migrazione (richiede MSG="messaggio")
+## migrate: Create a new migration (requires MSG="message")
 migrate:
 	@if [ -z "$(MSG)" ]; then \
-		echo "$(RED)✗ Errore: Devi specificare un messaggio$(NC)"; \
-		echo "$(YELLOW)Uso: make migrate MSG='descrizione migrazione'$(NC)"; \
+		echo "$(RED)✗ Error: You must specify a message$(NC)"; \
+		echo "$(YELLOW)Usage: make migrate MSG='migration description'$(NC)"; \
 		exit 1; \
 	fi
 	@if [ ! -d $(VERSIONS_DIR) ]; then \
-		echo "$(YELLOW)⚠ Directory versions mancante, creazione in corso...$(NC)"; \
+		echo "$(YELLOW)⚠ Versions directory missing, creating...$(NC)"; \
 		mkdir -p $(VERSIONS_DIR); \
 	fi
-	@echo "$(GREEN)Creazione migrazione: $(MSG)$(NC)"
+	@echo "$(GREEN)Creating migration: $(MSG)$(NC)"
 	$(COMPOSE) exec $(WEB_SERVICE) alembic revision --autogenerate -m "$(MSG)"
-	@echo "$(GREEN)✓ Migrazione creata$(NC)"
+	@echo "$(GREEN)✓ Migration created$(NC)"
 
-## upgrade: Applica tutte le migrazioni pendenti
+## upgrade: Apply all pending migrations
 upgrade:
-	@echo "$(GREEN)Applicazione migrazioni...$(NC)"
+	@echo "$(GREEN)Applying migrations...$(NC)"
 	$(COMPOSE) exec $(WEB_SERVICE) alembic upgrade head
-	@echo "$(GREEN)✓ Migrazioni applicate$(NC)"
+	@echo "$(GREEN)✓ Migrations applied$(NC)"
 
-## downgrade: Rollback dell'ultima migrazione
+## downgrade: Rollback last migration
 downgrade:
-	@echo "$(YELLOW)Rollback dell'ultima migrazione...$(NC)"
+	@echo "$(YELLOW)Rolling back last migration...$(NC)"
 	$(COMPOSE) exec $(WEB_SERVICE) alembic downgrade -1
-	@echo "$(GREEN)✓ Rollback completato$(NC)"
+	@echo "$(GREEN)✓ Rollback completed$(NC)"
 
-## migrate-status: Verifica lo stato delle migrazioni
+## migrate-status: Check migrations status
 migrate-status:
-	@echo "$(GREEN)Stato corrente delle migrazioni:$(NC)"
+	@echo "$(GREEN)Current migration status:$(NC)"
 	@$(COMPOSE) exec $(WEB_SERVICE) alembic current
 
-## migrate-history: Mostra la cronologia delle migrazioni
+## migrate-history: Show migrations history
 migrate-history:
-	@echo "$(GREEN)Cronologia delle migrazioni:$(NC)"
+	@echo "$(GREEN)Migrations history:$(NC)"
 	@$(COMPOSE) exec $(WEB_SERVICE) alembic history --verbose
 
-## db-reset: Reset completo del database (ATTENZIONE: cancella tutti i dati!)
+## backup: Create database backup
+backup:
+	@echo "$(GREEN)Creating database backup...$(NC)"
+	@mkdir -p $(BACKUP_DIR)
+	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
+	BACKUP_FILE="$(BACKUP_DIR)/backup_$${TIMESTAMP}.sql"; \
+	$(COMPOSE) exec -T $(DB_SERVICE) pg_dump -U $(POSTGRES_USER) $(POSTGRES_DB) > $${BACKUP_FILE}; \
+	if [ -f $${BACKUP_FILE} ]; then \
+		gzip $${BACKUP_FILE}; \
+		echo "$(GREEN)✓ Backup created: $${BACKUP_FILE}.gz$(NC)"; \
+		echo "$(BLUE)  Size: $$(du -h $${BACKUP_FILE}.gz | cut -f1)$(NC)"; \
+	else \
+		echo "$(RED)✗ Backup failed$(NC)"; \
+		exit 1; \
+	fi
+
+## restore: Restore database from backup (requires FILE=backup_file.sql.gz)
+restore:
+	@if [ -z "$(FILE)" ]; then \
+		echo "$(RED)✗ Error: You must specify a backup file$(NC)"; \
+		echo "$(YELLOW)Usage: make restore FILE=backups/backup_20231201_120000.sql.gz$(NC)"; \
+		echo "$(BLUE)Available backups:$(NC)"; \
+		ls -lh $(BACKUP_DIR)/*.sql.gz 2>/dev/null || echo "  No backups found"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(FILE)" ]; then \
+		echo "$(RED)✗ Error: Backup file not found: $(FILE)$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(RED)⚠ WARNING: This will overwrite the current database!$(NC)"
+	@echo "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
+	@echo "$(YELLOW)Restoring database from $(FILE)...$(NC)"
+	@gunzip -c $(FILE) | $(COMPOSE) exec -T $(DB_SERVICE) psql -U $(POSTGRES_USER) $(POSTGRES_DB)
+	@echo "$(GREEN)✓ Database restored$(NC)"
+
+## backup-list: List all available backups
+backup-list:
+	@echo "$(GREEN)Available backups:$(NC)"
+	@if [ -d $(BACKUP_DIR) ] && [ -n "$$(ls -A $(BACKUP_DIR)/*.sql.gz 2>/dev/null)" ]; then \
+		ls -lh $(BACKUP_DIR)/*.sql.gz; \
+	else \
+		echo "$(YELLOW)  No backups found$(NC)"; \
+	fi
+
+## backup-clean: Remove old backups (keeps last BACKUP_RETENTION_DAYS days)
+backup-clean:
+	@echo "$(YELLOW)Cleaning old backups (keeping last $(BACKUP_RETENTION_DAYS) days)...$(NC)"
+	@if [ -d $(BACKUP_DIR) ]; then \
+		find $(BACKUP_DIR) -name "backup_*.sql.gz" -type f -mtime +$(BACKUP_RETENTION_DAYS) -delete; \
+		echo "$(GREEN)✓ Old backups cleaned$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠ Backup directory not found$(NC)"; \
+	fi
+
+## db-reset: Complete database reset (WARNING: deletes all data!)
 db-reset:
-	@echo "$(RED)⚠ ATTENZIONE: Questa operazione cancellerà tutti i dati!$(NC)"
-	@echo "Sei sicuro? [y/N] " && read ans && [ $${ans:-N} = y ]
-	@echo "$(YELLOW)Reset del database...$(NC)"
+	@echo "$(RED)⚠ WARNING: This operation will delete all data!$(NC)"
+	@echo "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
+	@echo "$(YELLOW)Creating backup before reset...$(NC)"
+	@make backup
+	@echo "$(YELLOW)Resetting database...$(NC)"
 	@$(COMPOSE) down -v
-	@rm -rf postgres_data
+	@echo "$(GREEN)✓ Volumes removed$(NC)"
 	@$(COMPOSE) up -d
-	@sleep 5
+	@echo "$(YELLOW)Waiting for database to be ready...$(NC)"
+	@sleep 10
 	@make upgrade
-	@echo "$(GREEN)✓ Database resettato$(NC)"
+	@echo "$(GREEN)✓ Database reset completed$(NC)"
 
-## test: Esegue i test (da implementare)
+## fix-permissions: Fix directory permissions
+fix-permissions:
+	@echo "$(GREEN)Fixing permissions...$(NC)"
+	@if [ -d $(APP_DIR)/migrations ]; then \
+		sudo chown -R $(UID):$(GID) $(APP_DIR)/migrations 2>/dev/null || \
+		echo "$(YELLOW)⚠ Could not change ownership (trying chmod only)$(NC)"; \
+		chmod -R 755 $(APP_DIR)/migrations 2>/dev/null || \
+		sudo chmod -R 755 $(APP_DIR)/migrations; \
+	fi
+	@if [ -d $(BACKUP_DIR) ]; then \
+		sudo chown -R $(UID):$(GID) $(BACKUP_DIR) 2>/dev/null || true; \
+		chmod -R 755 $(BACKUP_DIR) 2>/dev/null || \
+		sudo chmod -R 755 $(BACKUP_DIR); \
+	fi
+	@echo "$(GREEN)✓ Permissions fixed$(NC)"
+
+## pgadmin-open: Open pgAdmin in browser
+pgadmin-open:
+	@echo "$(BLUE)Opening pgAdmin...$(NC)"
+	@echo "URL: http://localhost:$(PGADMIN_EXTERNAL_PORT)"
+	@echo "Email: $(PGADMIN_EMAIL)"
+	@echo "Password: $(PGADMIN_PASSWORD)"
+	@echo ""
+	@echo "$(YELLOW)To connect to the database:$(NC)"
+	@echo "  Host: db"
+	@echo "  Port: 5432"
+	@echo "  Database: $(POSTGRES_DB)"
+	@echo "  Username: $(POSTGRES_USER)"
+	@echo "  Password: $(POSTGRES_PASSWORD)"
+
+## test: Run tests (to be implemented)
 test:
-	@echo "$(YELLOW)Test non ancora implementati$(NC)"
+	@echo "$(YELLOW)Tests not yet implemented$(NC)"
 
-## clean: Rimuove container, immagini e volumi non utilizzati
+## clean: Remove unused containers, images and volumes
 clean:
-	@echo "$(YELLOW)Pulizia di container, immagini e volumi...$(NC)"
+	@echo "$(YELLOW)Cleaning containers, images and volumes...$(NC)"
 	@$(COMPOSE) down --rmi all --volumes --remove-orphans
-	@echo "$(GREEN)✓ Pulizia completata$(NC)"
+	@echo "$(GREEN)✓ Cleanup completed$(NC)"
 
-## clean-all: Pulizia completa inclusi i dati del database
-clean-all: clean
-	@echo "$(YELLOW)Rimozione dati del database...$(NC)"
-	@rm -rf postgres_data
-	@echo "$(GREEN)✓ Pulizia completa$(NC)"
+## clean-all: Complete cleanup including database data
+clean-all:
+	@echo "$(RED)⚠ WARNING: This will delete all data including backups!$(NC)"
+	@echo "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
+	@echo "$(YELLOW)Removing all data...$(NC)"
+	@$(COMPOSE) down --rmi all --volumes --remove-orphans
+	@sudo rm -rf postgres_data 2>/dev/null || rm -rf postgres_data 2>/dev/null || true
+	@sudo rm -rf $(BACKUP_DIR) 2>/dev/null || rm -rf $(BACKUP_DIR) 2>/dev/null || true
+	@echo "$(GREEN)✓ Complete cleanup done$(NC)"
 
-## dev: Avvia l'ambiente di sviluppo
+## dev: Start development environment
 dev: up logs
 
-## prod: Costruisce e avvia in modalità produzione
+## prod: Build and start in production mode
 prod:
-	@echo "$(GREEN)Avvio in modalità produzione...$(NC)"
+	@echo "$(GREEN)Starting in production mode...$(NC)"
 	@export FLASK_ENV=production && $(COMPOSE) up -d --build
-	@echo "$(GREEN)✓ Applicazione in produzione$(NC)"
+	@echo "$(GREEN)✓ Application in production$(NC)"
 
-## fix-permissions: Corregge i permessi delle directory (utile se hai problemi)
-fix-permissions:
-	@echo "$(GREEN)Correzione permessi...$(NC)"
-	@chmod -R 755 $(APP_DIR)/migrations
-	@echo "$(GREEN)✓ Permessi corretti$(NC)"
+## status: Show complete system status
+status:
+	@echo "$(GREEN)=== System Status ===$(NC)"
+	@echo ""
+	@echo "$(BLUE)Containers:$(NC)"
+	@$(COMPOSE) ps
+	@echo ""
+	@echo "$(BLUE)Migration Status:$(NC)"
+	@$(COMPOSE) exec $(WEB_SERVICE) alembic current 2>/dev/null || echo "  Not available"
+	@echo ""
+	@echo "$(BLUE)Disk Usage:$(NC)"
+	@docker system df
+	@echo ""
+	@echo "$(BLUE)Recent Backups:$(NC)"
+	@ls -lht $(BACKUP_DIR)/*.sql.gz 2>/dev/null | head -5 || echo "  No backups found"
 
-.PHONY: help init init-env init-migrations build up down restart ps logs logs-db logs-all \
-        shell shell-db migrate upgrade downgrade migrate-status migrate-history \
-        db-reset test clean clean-all dev prod fix-permissions
+.PHONY: help init init-env init-migrations init-backup-dir build up down restart ps \
+        logs logs-db logs-pgadmin logs-all shell shell-db migrate upgrade downgrade \
+        migrate-status migrate-history backup restore backup-list backup-clean \
+        db-reset fix-permissions pgadmin-open test clean clean-all dev prod status

@@ -1,107 +1,137 @@
-# Flask App con Docker e Alembic
+# Flask PostgreSQL Docker Template
 
-Template per un'applicazione Flask con PostgreSQL, Docker e Alembic per la gestione delle migrazioni.
+A production-ready Flask application template with PostgreSQL, pgAdmin, Alembic migrations, and automated backup/restore functionality.
 
-## 🚀 Quick Start
+## Features
 
-### Inizializzazione del progetto
+- 🐍 Flask web application
+- 🐘 PostgreSQL database with automatic migrations
+- 🔧 pgAdmin for database management
+- 💾 Automated backup and restore system
+- 🐳 Docker containerization
+- 🔄 Alembic database migrations
+- 🛠️ Comprehensive Makefile with all commands
+- 🔒 Proper permission management
+
+## Quick Start
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+- Make utility
+
+### Initial Setup
+
+1. Clone the repository
+2. Initialize the project:
+   ```bash
+   make init
+   ```
+3. Edit `.env` file with your configurations
+4. Start the application:
+   ```bash
+   make up
+   ```
+
+The application will be available at:
+- **Flask App**: http://localhost:5000
+- **pgAdmin**: http://localhost:5050
+
+## Available Commands
+
+### Project Setup
+```bash
+make init              # Initialize the entire project
+make init-env          # Create .env from template
+make init-migrations   # Initialize migrations structure
+make fix-permissions   # Fix directory permissions
+```
+
+### Container Management
+```bash
+make build      # Build Docker images
+make up         # Start all containers
+make down       # Stop all containers
+make restart    # Restart all containers
+make ps         # Show container status
+make status     # Show complete system status
+```
+
+### Development
+```bash
+make dev        # Start development environment with logs
+make logs       # View application logs
+make logs-db    # View database logs
+make logs-pgadmin  # View pgAdmin logs
+make shell      # Open bash in web container
+make shell-db   # Open PostgreSQL shell
+```
+
+### Database Migrations
+```bash
+make migrate MSG="description"  # Create new migration
+make upgrade                    # Apply all pending migrations
+make downgrade                  # Rollback last migration
+make migrate-status            # Check current migration
+make migrate-history           # Show migration history
+```
+
+### Backup & Restore
+```bash
+make backup                        # Create database backup
+make backup-list                   # List all backups
+make backup-clean                  # Remove old backups
+make restore FILE=backup_file.sql.gz  # Restore from backup
+```
+
+Backups are stored in `./backups/` directory with format: `backup_YYYYMMDD_HHMMSS.sql.gz`
+
+### Database Management
+```bash
+make db-reset       # Complete database reset (creates backup first)
+make pgadmin-open   # Show pgAdmin connection info
+```
+
+### Production
+```bash
+make prod       # Build and start in production mode
+```
+
+### Cleanup
+```bash
+make clean      # Remove containers, images, volumes
+make clean-all  # Complete cleanup including data
+```
+
+## pgAdmin Access
+
+Default credentials (change in `.env`):
+- **Email**: admin@admin.com
+- **Password**: admin
+- **URL**: http://localhost:5050
+
+### Connecting to Database in pgAdmin
+
+1. Open pgAdmin at http://localhost:5050
+2. Right-click "Servers" → "Register" → "Server"
+3. General tab:
+   - Name: `MyApp Database` (or any name)
+4. Connection tab:
+   - Host: `db`
+   - Port: `5432`
+   - Database: `myapp_db` (from .env)
+   - Username: `postgres` (from .env)
+   - Password: `postgres` (from .env)
+
+## Environment Variables
+
+Key variables in `.env`:
 
 ```bash
-# 1. Inizializza il progetto (crea .env e directory migrations)
-make init
+# Automatic user detection (usually correct)
+UID=1000
+GID=1000
 
-# 2. Modifica il file .env con le tue configurazioni
-
-# 3. Costruisci e avvia i container
-make build
-make up
-
-# 4. Crea la prima migrazione
-make migrate MSG="initial migration"
-
-# 5. Applica le migrazioni
-make upgrade
-```
-
-### Comandi principali
-
-```bash
-make help              # Mostra tutti i comandi disponibili
-make dev               # Avvia in modalità sviluppo con log
-make ps                # Mostra lo stato dei container
-make logs              # Visualizza i log dell'applicazione
-make shell             # Apri una shell nel container
-make restart           # Riavvia i container
-make down              # Ferma i container
-```
-
-## 📦 Gestione Database e Migrazioni
-
-### Creare una nuova migrazione
-
-```bash
-# Dopo aver modificato i modelli in app/models.py
-make migrate MSG="aggiungi campo email a User"
-```
-
-### Applicare le migrazioni
-
-```bash
-make upgrade
-```
-
-### Rollback di una migrazione
-
-```bash
-make downgrade
-```
-
-### Verificare lo stato delle migrazioni
-
-```bash
-make migrate-status      # Stato corrente
-make migrate-history     # Cronologia completa
-```
-
-### Accedere al database
-
-```bash
-make shell-db           # Apri shell PostgreSQL
-```
-
-### Reset completo del database (⚠️ ATTENZIONE!)
-
-```bash
-make db-reset           # Cancella tutto e ricrea
-```
-
-## 📁 Struttura del progetto
-
-```
-.
-├── app/
-│   ├── __init__.py           # Inizializzazione Flask app
-│   ├── models.py             # Modelli SQLAlchemy
-│   ├── routes.py             # Routes dell'applicazione
-│   └── migrations/           # Migrazioni Alembic
-│       ├── env.py            # Configurazione Alembic
-│       ├── script.py.mako    # Template per nuove migrazioni
-│       └── versions/         # File di migrazione
-├── docker-compose.yml        # Configurazione Docker
-├── Dockerfile                # Immagine Docker
-├── entrypoint.sh            # Script di avvio
-├── requirements.txt         # Dipendenze Python
-├── alembic.ini             # Configurazione Alembic
-├── Makefile                # Comandi di gestione
-├── .env                    # Variabili d'ambiente (non committare!)
-└── .env.example           # Template variabili d'ambiente
-```
-
-## 🔧 Configurazione
-
-### Variabili d'ambiente (.env)
-
-```bash
 # Flask
 FLASK_ENV=development
 SECRET_KEY=your-secret-key
@@ -113,55 +143,83 @@ POSTGRES_PASSWORD=postgres
 POSTGRES_DB=myapp_db
 POSTGRES_PORT=5432
 
-# Database URL
-DATABASE_URL=postgresql://postgres:postgres@db:5432/myapp_db
+# pgAdmin
+PGADMIN_EMAIL=admin@admin.com
+PGADMIN_PASSWORD=admin
+PGADMIN_EXTERNAL_PORT=5050
+
+# Backup
+BACKUP_RETENTION_DAYS=7
 ```
 
-## 📝 Workflow di sviluppo tipico
+## Project Structure
 
-1. **Modifica i modelli** in `app/models.py`
-2. **Crea una migrazione**: `make migrate MSG="descrizione"`
-3. **Applica la migrazione**: `make upgrade`
-4. **Testa le modifiche**: visita http://localhost:5000
+```
+.
+├── app/
+│   ├── __init__.py           # Flask app factory
+│   ├── models.py             # Database models
+│   ├── routes.py             # Application routes
+│   └── migrations/           # Alembic migrations
+├── backups/                  # Database backups
+├── docker-compose.yml        # Docker services configuration
+├── Dockerfile               # Application container
+├── entrypoint.sh            # Container startup script
+├── requirements.txt         # Python dependencies
+├── Makefile                 # All commands
+├── .env                     # Environment variables (not in git)
+└── .env.example             # Environment template
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
-### I container non si avviano
+### Permission Issues
 
+If you encounter permission errors:
 ```bash
-# Controlla i log
-make logs-all
+make fix-permissions
+```
 
-# Ricostruisci le immagini
-make clean
-make build
+### Database Connection Issues
+
+Check if database is ready:
+```bash
+make logs-db
+```
+
+### Reset Everything
+
+For a fresh start:
+```bash
+make clean-all
+make init
 make up
 ```
 
-### Problemi con le migrazioni
+## Backup Strategy
 
-```bash
-# Verifica lo stato
-make migrate-status
+The system includes automatic backup capabilities:
 
-# Se necessario, reset completo
-make db-reset
-```
+1. **Manual Backup**: `make backup`
+2. **Before Reset**: Automatic backup before `make db-reset`
+3. **Retention**: Old backups are cleaned based on `BACKUP_RETENTION_DAYS`
 
-### Accesso al database negato
+## Security Notes
 
-Verifica che le credenziali in `.env` siano corrette e che il container del database sia in esecuzione (`make ps`).
+⚠️ **Important for Production**:
 
-## 🧹 Pulizia
+1. Change `SECRET_KEY` in `.env`
+2. Use strong passwords for database and pgAdmin
+3. Don't commit `.env` to version control
+4. Use environment-specific `.env` files
+5. Consider using Docker secrets for sensitive data
 
-```bash
-make clean          # Rimuove container e immagini
-make clean-all      # Rimuove anche i dati del database
-```
+## Contributing
 
-## 📚 Risorse utili
+1. Create a feature branch
+2. Make your changes
+3. Test thoroughly
+4. Submit a pull request
 
-- [Flask Documentation](https://flask.palletsprojects.com/)
-- [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
-- [Alembic Documentation](https://alembic.sqlalchemy.org/)
-- [Docker Documentation](https://docs.docker.com/)
+## License
+
+MIT License - Feel free to use this template for your projects.
