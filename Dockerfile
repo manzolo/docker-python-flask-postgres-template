@@ -1,27 +1,29 @@
-# Usa un'immagine base di Python
-FROM python:3.11-slim
+# Use Python base image
+FROM python:3.12-slim
 
-# Installa dipendenze di sistema necessarie per psql
+# Install system dependencies for PostgreSQL and psycopg2
 RUN apt-get update && apt-get install -y \
     postgresql-client \
+    libpq-dev \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Imposta la directory di lavoro
+# Set working directory
 WORKDIR /app
 
-# Copia i requisiti e installa le dipendenze
+# Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia il codice dell'applicazione
+# Copy application code
 COPY . .
 
-# Copia lo script di entrypoint
+# Copy and set entrypoint script permissions
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
-# Espone la porta per Flask
+# Expose port for Flask
 EXPOSE ${APP_PORT:-5000}
 
-# Definisce il comando di avvio
+# Define startup command
 ENTRYPOINT ["./entrypoint.sh"]
